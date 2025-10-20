@@ -1,0 +1,14 @@
+@keyframes highlight {
+  0% { background-color: var(--color-sky-50); }
+  25% { background-color: var(--color-sky-200); }
+  50% { background-color: var(--color-sky-100); }
+  75% { background-color: var(--color-sky-200); }
+  100% { background-color: #fff; }
+}
+
+.animate-highlight {
+  animation: highlight 10s ease-in-out;
+}
+body{
+  padding-bottom: 30px;
+}
