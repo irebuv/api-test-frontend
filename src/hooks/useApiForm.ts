@@ -10,7 +10,7 @@ export function useApiForm<T extends Record<string, any>>(initial: T) {
     const [processing, setProcessing] = useState(false);
 
     const setField = (name: keyof T | string, value: any) => {
-        setDataState(prev => ({ ...(prev as any), [name]: value }));
+        setDataState((prev) => ({ ...(prev as any), [name]: value }));
     };
 
     const reset = (newValues?: T) => {
@@ -40,7 +40,7 @@ export function useApiForm<T extends Record<string, any>>(initial: T) {
                     if (v instanceof File) {
                         form.append(k, v);
                     } else if (Array.isArray(v)) {
-                        v.forEach(item => form.append(`${k}[]`, item));
+                        v.forEach((item) => form.append(`${k}[]`, item));
                     } else {
                         form.append(k, String(v));
                     }

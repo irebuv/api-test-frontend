@@ -1,43 +1,72 @@
 import MainLayout from "@/layouts/main-layout";
 import BusinessList from "@/pages/public/business/components/business-list";
-import React, {useState} from "react";
-import {Pagination} from "@/components/ui/custom/pagination";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
-import type {BusinessResponse} from "@/types/businesses";
-import {useAuth} from "@/context/AuthContext";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
+import React, { useState } from "react";
+import { Pagination } from "@/components/ui/custom/pagination";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import type { BusinessResponse } from "@/types/businesses";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import CustomModalForm from "@/components/custom-modal-form";
 import DialogRequestShow from "@/pages/public/business/components/request-modal";
-import {useApiForm} from "@/hooks/useApiForm";
-import {useQueryData} from "@/hooks/useQueryData";
+import { useApiForm } from "@/hooks/useApiForm";
+import { useQueryData } from "@/hooks/useQueryData";
+import { validateWithZod, type ClientErrors } from "@/lib/validateWithZod";
+import { BusinessSchema } from "@/validation/business";
+import { RequestSchema } from "@/validation/request";
 
 export default function Businesses() {
-    const {data, filters, setFilters, refetch} = useQueryData<BusinessResponse, {
-        type: string;
-        myProjects: number | string;
-        page: number;
-    }>({
+    const { data, filters, setFilters, refetch } = useQueryData<
+        BusinessResponse,
+        {
+            type: string;
+            myProjects: number | string;
+            page: number;
+        }
+    >({
         url: "/businesses",
-        initial: {type: "all", myProjects: 0, page: 1},
+        initial: { type: "all", myProjects: 0, page: 1 },
     });
 
     const businessesFields = [
-        {id: "name", name: "name", label: "Name", type: "text"},
-        {id: "description", name: "description", label: "Description", type: "textarea"},
-        {id: "type", name: "type", label: "Type", type: "select"},
-        {id: "image", name: "image", label: "Image", type: "file"},
+        { id: "name", name: "name", label: "Name", type: "text" },
+        {
+            id: "description",
+            name: "description",
+            label: "Description",
+            type: "textarea",
+        },
+        { id: "type", name: "type", label: "Type", type: "select" },
+        { id: "image", name: "image", label: "Image", type: "file" },
     ];
     const requestFields = [
-        {id: "name", name: "name", label: "Name", type: "text"},
-        {id: "phone", name: "phone", label: "Phone", type: "text"},
-        {id: "date", name: "date", label: "Choose correct date", type: "date-select"},
-        {id: "description", name: "description", label: "Description", type: "textarea"},
+        { id: "name", name: "name", label: "Name", type: "text" },
+        { id: "phone", name: "phone", label: "Phone", type: "text" },
+        {
+            id: "date",
+            name: "date",
+            label: "Choose correct date",
+            type: "date-select",
+        },
+        {
+            id: "description",
+            name: "description",
+            label: "Description",
+            type: "textarea",
+        },
     ];
-    /*-----------Form block start-----------*/
-    /*-----------Form block start-----------*/
+
+    /* ↓↓↓↓↓↓↓↓↓↓↓↓↓ Form block ↓↓↓↓↓↓↓↓↓↓↓↓↓ */
     const [modalOpen, setModalOpen] = useState(false);
-    const [mode, setMode] = useState<"create" | "createRequest" | "edit">("create");
+    const [mode, setMode] = useState<"create" | "createRequest" | "edit">(
+        "create"
+    );
     const [editingId, setEditingId] = useState<number | null>(null);
     const {
         data: businessData,
@@ -45,12 +74,12 @@ export default function Businesses() {
         reset: resetBusiness,
         errors: businessErrors,
         processing: businessProcessing,
-        submit: submitBusiness
+        submit: submitBusiness,
     } = useApiForm({
         name: "",
         description: "",
-        image: null as File | null,
         type: "",
+        image: null as File | null,
     });
     const {
         data: requestData,
@@ -58,7 +87,7 @@ export default function Businesses() {
         reset: resetRequest,
         errors: requestErrors,
         processing: requestProcessing,
-        submit: submitRequest
+        submit: submitRequest,
     } = useApiForm({
         name: "",
         phone: "",
@@ -68,6 +97,8 @@ export default function Businesses() {
     const openCreate = () => {
         resetBusiness();
         resetRequest();
+        setBizErrors({});
+        setReqErrors({});
         setMode("create");
         setEditingId(null);
         setModalOpen(true);
@@ -75,10 +106,12 @@ export default function Businesses() {
     const onCreateRequest = (businessId: number) => {
         resetRequest();
         resetBusiness();
+        setBizErrors({});
+        setReqErrors({});
         setMode("createRequest");
         setEditingId(businessId);
         setModalOpen(true);
-    }
+    };
     const openEdit = (item: any) => {
         resetRequest();
         resetBusiness({
@@ -87,12 +120,15 @@ export default function Businesses() {
             image: null,
             type: item.type ?? "",
         });
+        setBizErrors({});
+        setReqErrors({});
         setMode("edit");
         setEditingId(item.id);
         setModalOpen(true);
     };
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
 
         const commonOptions = {
             asFormData: true,
@@ -104,33 +140,64 @@ export default function Businesses() {
         };
 
         if (mode === "create") {
+        const result = validateWithZod(BusinessSchema, businessData);
+        if (!result.ok) {
+            setBizErrors(result.errors);
+            return;
+        }
+        setBizErrors({});
             submitBusiness("/businesses", "post", commonOptions);
         } else if (mode === "edit" && editingId) {
             submitBusiness(`/businesses/${editingId}`, "put", commonOptions);
         } else if (mode === "createRequest" && editingId) {
-            submitRequest(`/businesses/request/${editingId}`, "post", commonOptions);
+            const result = validateWithZod(RequestSchema, requestData);
+            if (!result.ok) {
+                setReqErrors(result.errors);
+                return;
+            }
+            setReqErrors({});
+            submitRequest(
+                `/businesses/request/${editingId}`,
+                "post",
+                commonOptions
+            );
         }
     };
-    /*-----------Form block end-----------*/
-    /*-----------Form block end-----------*/
-    const {user} = useAuth();
+    /* ↑↑↑↑↑↑↑↑↑↑↑↑↑ Form block ↑↑↑↑↑↑↑↑↑↑↑↑↑ */
+    /* ↓↓↓↓↓↓↓↓↓↓↓↓↓ Clients errors ↓↓↓↓↓↓↓↓↓↓↓↓↓ */
+    const [bizErrors, setBizErrors] = useState<ClientErrors>({});
+    const [reqErrors, setReqErrors] = useState<ClientErrors>({});
+
+    const mergedBusinessErrors = { ...businessErrors, ...bizErrors };
+    const mergedRequestErrors = { ...requestErrors, ...reqErrors };
+    
+   const setBusinessField = (name: string, value: any) => {
+     setBusinessData(name as any, value);
+     setBizErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
+   };
+   const setRequestField = (name: string, value: any) => {
+     setRequestData(name as any, value);
+     setReqErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
+   };
+    /* ↑↑↑↑↑↑↑↑↑↑↑↑↑ Clients errors ↑↑↑↑↑↑↑↑↑↑↑↑↑ */
+
+    const { user } = useAuth();
 
     const handleDelete = (id: number) => {
         submitBusiness(`/businesses/${id}`, "delete", {
             onSuccess: () => {
                 setModalOpen(false);
                 refetch();
-            }
+            },
         });
-    }
+    };
     return (
         <MainLayout className="mx-auto mt-5 flex max-w-[1150px] flex-col gap-5 px-7">
-
-            <div className={'flex items-center'}>
-                <div className={'w-[200px]'}>
+            <div className={"flex items-center"}>
+                <div className={"w-[200px]"}>
                     <Select
                         value={filters.type}
-                        onValueChange={(value) => setFilters({type: value})}
+                        onValueChange={(value) => setFilters({ type: value })}
                     >
                         <SelectTrigger>
                             <SelectValue placeholder={`All`}></SelectValue>
@@ -138,7 +205,9 @@ export default function Businesses() {
                         <SelectContent>
                             <SelectItem value="all">All</SelectItem>
                             {data?.types?.map((el) => (
-                                <SelectItem key={el} value={el}>{el}</SelectItem>
+                                <SelectItem key={el} value={el}>
+                                    {el}
+                                </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -146,21 +215,40 @@ export default function Businesses() {
                 <div className="ml-auto">
                     {user ? (
                         <div className="flex items-center gap-3">
-                            <label htmlFor="myBusinesses"
-                                   className={'flex w-full cursor-pointer items-center justify-end p-2'}>
+                            <label
+                                htmlFor="myBusinesses"
+                                className={
+                                    "flex w-full cursor-pointer items-center justify-end p-2"
+                                }
+                            >
                                 <span>Only my projects</span>
                                 &nbsp;&nbsp;
                                 <Input
-                                    className={'w-[30px] cursor-pointer'}
+                                    className={"w-[30px] cursor-pointer"}
                                     id="myBusinesses"
-                                    type={'checkbox'}
+                                    type={"checkbox"}
                                     checked={data?.myProjects == 1}
-                                    onChange={(e) => setFilters({myProjects: e.target.checked ? 1 : 0})}
+                                    onChange={(e) =>
+                                        setFilters({
+                                            myProjects: e.target.checked
+                                                ? 1
+                                                : 0,
+                                        })
+                                    }
                                 />
                             </label>
-                            <DialogRequestShow myRequests={data?.myRequests ?? []} unreadCount={data?.unreadCount ?? 0} refetch={refetch}/>
-                            <Button type="button" className="cursor-pointer px-4" onClick={openCreate}>Create
-                                Business</Button>
+                            <DialogRequestShow
+                                myRequests={data?.myRequests ?? []}
+                                unreadCount={data?.unreadCount ?? 0}
+                                refetch={refetch}
+                            />
+                            <Button
+                                type="button"
+                                className="cursor-pointer px-4"
+                                onClick={openCreate}
+                            >
+                                Create Business
+                            </Button>
                         </div>
                     ) : (
                         <Button disabled>Log in to add a project...</Button>
@@ -171,13 +259,35 @@ export default function Businesses() {
             <CustomModalForm
                 open={modalOpen}
                 onOpenChange={setModalOpen}
-                title={mode === "create" ? "Create Business" : mode === "edit" ? "Edit Business" : "Create Request"}
-                description={mode === "create" ? "Create new" : mode === "edit" ? "Edit existing" : "Create a new request"}
-                fields={mode === "createRequest" ? requestFields : businessesFields}
+                title={
+                    mode === "create"
+                        ? "Create Business"
+                        : mode === "edit"
+                        ? "Edit Business"
+                        : "Create Request"
+                }
+                description={
+                    mode === "create"
+                        ? "Create new"
+                        : mode === "edit"
+                        ? "Edit existing"
+                        : "Create a new request"
+                }
+                fields={
+                    mode === "createRequest" ? requestFields : businessesFields
+                }
                 data={mode === "createRequest" ? requestData : businessData}
-                setData={mode === "createRequest" ? setRequestData : setBusinessData}
-                errors={mode === "createRequest" ? requestErrors : businessErrors}
-                processing={mode === "createRequest" ? requestProcessing : businessProcessing}
+                 setData={mode === "createRequest" ? setRequestField : setBusinessField}
+                errors={
+                    mode === "createRequest"
+                        ? mergedRequestErrors
+                        : mergedBusinessErrors
+                }
+                processing={
+                    mode === "createRequest"
+                        ? requestProcessing
+                        : businessProcessing
+                }
                 onSubmit={handleSubmit}
                 submitLabel={mode === "edit" ? "Save" : "Create"}
             />
