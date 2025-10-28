@@ -20,6 +20,16 @@ import { useQueryData } from "@/hooks/useQueryData";
 import { validateWithZod, type ClientErrors } from "@/lib/validateWithZod";
 import { BusinessSchema } from "@/validation/business";
 import { RequestSchema } from "@/validation/request";
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Businesses() {
     const { data, filters, setFilters, refetch } = useQueryData<
@@ -28,12 +38,20 @@ export default function Businesses() {
             type: string;
             myProjects: number | string;
             page: number;
+            search: string;
+            sort: string;
         }
     >({
         url: "/businesses",
-        initial: { type: "all", myProjects: 0, page: 1 },
+        initial: {
+            type: "all",
+            myProjects: 0,
+            page: 1,
+            search: "",
+            sort: "id",
+        },
     });
-
+    console.log("serverInfo =", (data as any)?.serverInfo ?? "");
     const businessesFields = [
         { id: "name", name: "name", label: "Name", type: "text" },
         {
@@ -102,6 +120,7 @@ export default function Businesses() {
         setMode("create");
         setEditingId(null);
         setModalOpen(true);
+        setIsValid(false);
     };
     const onCreateRequest = (businessId: number) => {
         resetRequest();
@@ -111,8 +130,10 @@ export default function Businesses() {
         setMode("createRequest");
         setEditingId(businessId);
         setModalOpen(true);
+        setIsValid(false);
     };
     const openEdit = (item: any) => {
+        console.log(item.type);
         resetRequest();
         resetBusiness({
             name: item.name ?? "",
@@ -125,10 +146,21 @@ export default function Businesses() {
         setMode("edit");
         setEditingId(item.id);
         setModalOpen(true);
+        setTimeout(
+            () =>
+                setIsValid(
+                    BusinessSchema.safeParse({
+                        name: item.name ?? "",
+                        description: item.description ?? "",
+                        image: null,
+                        type: item.type ?? "",
+                    }).success
+                ),
+            0
+        );
     };
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
 
         const commonOptions = {
             asFormData: true,
@@ -140,14 +172,20 @@ export default function Businesses() {
         };
 
         if (mode === "create") {
-        const result = validateWithZod(BusinessSchema, businessData);
-        if (!result.ok) {
-            setBizErrors(result.errors);
-            return;
-        }
-        setBizErrors({});
+            const result = validateWithZod(BusinessSchema, businessData);
+            if (!result.ok) {
+                setBizErrors(result.errors);
+                return;
+            }
+            setBizErrors({});
             submitBusiness("/businesses", "post", commonOptions);
         } else if (mode === "edit" && editingId) {
+            const result = validateWithZod(BusinessSchema, businessData);
+            if (!result.ok) {
+                setBizErrors(result.errors);
+                return;
+            }
+            setBizErrors({});
             submitBusiness(`/businesses/${editingId}`, "put", commonOptions);
         } else if (mode === "createRequest" && editingId) {
             const result = validateWithZod(RequestSchema, requestData);
@@ -167,22 +205,55 @@ export default function Businesses() {
     /* ↓↓↓↓↓↓↓↓↓↓↓↓↓ Clients errors ↓↓↓↓↓↓↓↓↓↓↓↓↓ */
     const [bizErrors, setBizErrors] = useState<ClientErrors>({});
     const [reqErrors, setReqErrors] = useState<ClientErrors>({});
+    const [isValid, setIsValid] = useState(false);
 
     const mergedBusinessErrors = { ...businessErrors, ...bizErrors };
     const mergedRequestErrors = { ...requestErrors, ...reqErrors };
-    
-   const setBusinessField = (name: string, value: any) => {
-     setBusinessData(name as any, value);
-     setBizErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
-   };
-   const setRequestField = (name: string, value: any) => {
-     setRequestData(name as any, value);
-     setReqErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
-   };
+
+    const setBusinessField = (name: string, value: any) => {
+        setBusinessData(name as any, value);
+
+        const err = validateField(BusinessSchema, name, value);
+
+        setBizErrors((prev) => ({
+            ...prev,
+            [name]: err ?? "",
+        }));
+
+        const allValid = BusinessSchema.safeParse({
+            ...businessData,
+            [name]: value,
+        }).success;
+        setIsValid(allValid);
+    };
+
+    const setRequestField = (name: string, value: any) => {
+        setRequestData(name as any, value);
+
+        const err = validateField(RequestSchema, name, value);
+
+        setReqErrors((prev) => ({
+            ...prev,
+            [name]: err ?? "",
+        }));
+
+        const allValid = RequestSchema.safeParse({
+            ...requestData,
+            [name]: value,
+        }).success;
+        setIsValid(allValid);
+    };
+
+    const validateField = (schema: any, name: string, value: any) => {
+        const shape = schema.shape?.[name];
+        if (!shape) return null;
+        const result = shape.safeParse(value);
+        return result.success ? null : result.error.issues[0].message;
+    };
     /* ↑↑↑↑↑↑↑↑↑↑↑↑↑ Clients errors ↑↑↑↑↑↑↑↑↑↑↑↑↑ */
 
     const { user } = useAuth();
-
+    console.log(filters.type, filters.sort);
     const handleDelete = (id: number) => {
         submitBusiness(`/businesses/${id}`, "delete", {
             onSuccess: () => {
@@ -193,32 +264,126 @@ export default function Businesses() {
     };
     return (
         <MainLayout className="mx-auto mt-5 flex max-w-[1150px] flex-col gap-5 px-7">
-            <div className={"flex items-center"}>
+            <div className={"flex items-center justify-between"}>
                 <div className={"w-[200px]"}>
-                    <Select
-                        value={filters.type}
-                        onValueChange={(value) => setFilters({ type: value })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder={`All`}></SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All</SelectItem>
-                            {data?.types?.map((el) => (
-                                <SelectItem key={el} value={el}>
-                                    {el}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="min-w-[180px] justify-between cursor-pointer flex items-center"
+                                >
+                                    <div className="w-full">
+                                        {filters.type !== "all" ||
+                                        filters.sort !== "id" ? (
+                                            <div className="flex flex-wrap items-center gap-1">
+                                                {filters.type &&
+                                                    filters.type !== "all" && (
+                                                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs">
+                                                            {filters.type}
+                                                        </span>
+                                                    )}
+                                                {filters.sort &&
+                                                    filters.sort !== "id" && (
+                                                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs">
+                                                            {filters.sort}
+                                                        </span>
+                                                    )}
+                                            </div>
+                                        ) : (
+                                            <div>Chose your filters here</div>
+                                        )}
+                                    </div>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            {(filters.type && filters.type !== "all") ||
+                            (filters.sort && filters.sort !== "id") ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation(); 
+                                        setFilters({
+                                            ...filters,
+                                            type: "all",
+                                            sort: "id",
+                                            page: 1,
+                                        });
+                                    }}
+                                    className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                >
+                                    ✕
+                                </button>
+                            ) : null}
+                            <DropdownMenuContent align="start" className="w-56">
+                                <DropdownMenuLabel>
+                                    <b>Sort by:</b>
+                                </DropdownMenuLabel>
+                                <Select
+                                    value={filters.type}
+                                    onValueChange={(value) =>
+                                        setFilters({ type: value })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="All" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
+                                        {data?.types?.map((el) => (
+                                            <SelectItem key={el} value={el}>
+                                                {el}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>
+                                    <b>Filter by:</b>
+                                </DropdownMenuLabel>
+                                <DropdownMenuRadioGroup
+                                    value={filters.sort ?? "id"}
+                                    onValueChange={(v) =>
+                                        setFilters({ sort: v })
+                                    }
+                                >
+                                    <DropdownMenuRadioItem value="id">
+                                        ID (default)
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="updated_at">
+                                        Date
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="popular">
+                                        Popular
+                                    </DropdownMenuRadioItem>
+                                </DropdownMenuRadioGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
-                <div className="ml-auto">
+                <div className="relative max-w-xs">
+                    <Input
+                        type="search"
+                        className="w-[300px]"
+                        value={filters.search || ""}
+                        onChange={(e) => setFilters({ search: e.target.value })}
+                    />
+                    {filters.search && (
+                        <button
+                            type="button"
+                            onClick={() => setFilters({ search: "" })}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
+                <div>
                     {user ? (
                         <div className="flex items-center gap-3">
                             <label
                                 htmlFor="myBusinesses"
                                 className={
-                                    "flex w-full cursor-pointer items-center justify-end p-2"
+                                    "flex w-auto cursor-pointer items-center justify-end p-2"
                                 }
                             >
                                 <span>Only my projects</span>
@@ -277,7 +442,11 @@ export default function Businesses() {
                     mode === "createRequest" ? requestFields : businessesFields
                 }
                 data={mode === "createRequest" ? requestData : businessData}
-                 setData={mode === "createRequest" ? setRequestField : setBusinessField}
+                setData={
+                    mode === "createRequest"
+                        ? setRequestField
+                        : setBusinessField
+                }
                 errors={
                     mode === "createRequest"
                         ? mergedRequestErrors
@@ -290,6 +459,7 @@ export default function Businesses() {
                 }
                 onSubmit={handleSubmit}
                 submitLabel={mode === "edit" ? "Save" : "Create"}
+                isValid={isValid}
             />
             <BusinessList
                 onEdit={(el) => openEdit(el)}

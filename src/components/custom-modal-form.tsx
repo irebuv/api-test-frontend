@@ -44,6 +44,7 @@ type Props = {
     errors: Record<string, string | string[] | undefined>;
     onSubmit: (e: React.FormEvent) => void;
     submitLabel?: string;
+    isValid: boolean;
 };
 
 export default function CustomModalForm({
@@ -58,6 +59,7 @@ export default function CustomModalForm({
     errors,
     onSubmit,
     submitLabel = "Submit",
+    isValid,
 }: Props) {
     const [selectedDate, setSelectedDate] = useState<Date>();
     return (
@@ -101,6 +103,7 @@ export default function CustomModalForm({
                                 />
                             ) : f.type === "select" ? (
                                 <Select
+                                    value={data.type || undefined}   
                                     onValueChange={(value) =>
                                         setData("type", value)
                                     }
@@ -191,10 +194,10 @@ export default function CustomModalForm({
                         </DialogClose>
                         <Button
                             type="submit"
-                            disabled={processing}
+                            disabled={processing || !isValid}
                             className="cursor-pointer"
                         >
-                            {processing ? "Saving..." : submitLabel}
+                            {(processing) ? "Saving..." : submitLabel}
                         </Button>
                     </DialogFooter>
                 </form>
