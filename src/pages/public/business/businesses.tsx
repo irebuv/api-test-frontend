@@ -2,13 +2,6 @@ import MainLayout from "@/layouts/main-layout";
 import BusinessList from "@/pages/public/business/components/business-list";
 import React, { useState } from "react";
 import { Pagination } from "@/components/ui/custom/pagination";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import type { BusinessResponse } from "@/types/businesses";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -20,16 +13,7 @@ import { useQueryData } from "@/hooks/useQueryData";
 import { validateWithZod, type ClientErrors } from "@/lib/validateWithZod";
 import { BusinessSchema } from "@/validation/business";
 import { RequestSchema } from "@/validation/request";
-import {
-    DropdownMenu,
-    DropdownMenuCheckboxItem,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import FilterDropdown from "@/components/filter-dropdown";
 
 export default function Businesses() {
     const { data, filters, setFilters, refetch } = useQueryData<
@@ -265,101 +249,7 @@ export default function Businesses() {
     return (
         <MainLayout className="mx-auto mt-5 flex max-w-[1150px] flex-col gap-5 px-7">
             <div className={"flex items-center justify-between"}>
-                <div className={"w-[200px]"}>
-                    <div className="flex items-center gap-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    className="min-w-[180px] justify-between cursor-pointer flex items-center"
-                                >
-                                    <div className="w-full">
-                                        {filters.type !== "all" ||
-                                        filters.sort !== "id" ? (
-                                            <div className="flex flex-wrap items-center gap-1">
-                                                {filters.type &&
-                                                    filters.type !== "all" && (
-                                                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs">
-                                                            {filters.type}
-                                                        </span>
-                                                    )}
-                                                {filters.sort &&
-                                                    filters.sort !== "id" && (
-                                                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs">
-                                                            {filters.sort}
-                                                        </span>
-                                                    )}
-                                            </div>
-                                        ) : (
-                                            <div>Chose your filters here</div>
-                                        )}
-                                    </div>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            {(filters.type && filters.type !== "all") ||
-                            (filters.sort && filters.sort !== "id") ? (
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation(); 
-                                        setFilters({
-                                            ...filters,
-                                            type: "all",
-                                            sort: "id",
-                                            page: 1,
-                                        });
-                                    }}
-                                    className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
-                                >
-                                    ✕
-                                </button>
-                            ) : null}
-                            <DropdownMenuContent align="start" className="w-56">
-                                <DropdownMenuLabel>
-                                    <b>Sort by:</b>
-                                </DropdownMenuLabel>
-                                <Select
-                                    value={filters.type}
-                                    onValueChange={(value) =>
-                                        setFilters({ type: value })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="All" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All</SelectItem>
-                                        {data?.types?.map((el) => (
-                                            <SelectItem key={el} value={el}>
-                                                {el}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel>
-                                    <b>Filter by:</b>
-                                </DropdownMenuLabel>
-                                <DropdownMenuRadioGroup
-                                    value={filters.sort ?? "id"}
-                                    onValueChange={(v) =>
-                                        setFilters({ sort: v })
-                                    }
-                                >
-                                    <DropdownMenuRadioItem value="id">
-                                        ID (default)
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="updated_at">
-                                        Date
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="popular">
-                                        Popular
-                                    </DropdownMenuRadioItem>
-                                </DropdownMenuRadioGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
+                <FilterDropdown filters={filters} types={data?.types} setFilters={setFilters} />
                 <div className="relative max-w-xs">
                     <Input
                         type="search"
