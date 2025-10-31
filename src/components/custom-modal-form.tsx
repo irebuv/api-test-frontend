@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -41,6 +41,7 @@ type Props = {
     data: Record<string, any>;
     setData: (name: string, value: any) => void;
     processing: boolean;
+    uploadingImage: boolean;
     errors: Record<string, string | string[] | undefined>;
     onSubmit: (e: React.FormEvent) => void;
     submitLabel?: string;
@@ -56,12 +57,54 @@ export default function CustomModalForm({
     data,
     setData,
     processing,
+    uploadingImage,
     errors,
     onSubmit,
     submitLabel = "Submit",
     isValid,
 }: Props) {
+    const [preview, setPreview] = useState<string | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date>();
+    const [dragActive, setDragActive] = useState(false);
+    useEffect(() => {
+        if (!data.image) {
+            setPreview(null);
+            return;
+        }
+
+        const url = URL.createObjectURL(data.image as File);
+        setPreview(url);
+
+        return () => URL.revokeObjectURL(url);
+    }, [data.image]);
+    const handleFile = (name: string, file: File) => {
+        if (file && file.type.startsWith("image/")) {
+            setData(name, file);
+        }
+    };
+    // drag & drop
+    const handleDrag = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === "dragenter" || e.type === "dragover")
+            setDragActive(true);
+        if (e.type === "dragleave") setDragActive(false);
+    };
+
+    const handleDrop = (
+        e: React.DragEvent<HTMLLabelElement>,
+        fieldName: string
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith("image/")) {
+            setData(fieldName, file);
+        }
+    };
+    console.log(data);
     return (
         <Dialog open={open} onOpenChange={onOpenChange} modal>
             <DialogContent className="sm:max-w-[640px]">
@@ -88,22 +131,84 @@ export default function CustomModalForm({
                                     className="w-full border rounded p-2"
                                 />
                             ) : f.type === "file" ? (
-                                <input
-                                    id={f.id}
-                                    name={f.name}
-                                    type="file"
-                                    onChange={(e) =>
-                                        setData(
-                                            f.name,
-                                            e.target.files
-                                                ? e.target.files[0]
-                                                : null
-                                        )
-                                    }
-                                />
+                                <div className="flex flex-col space-y-3">
+                                    <label
+                                        htmlFor={f.id}
+                                        onDragEnter={handleDrag}
+                                        onDragOver={handleDrag}
+                                        onDragLeave={handleDrag}
+                                        onDrop={(e) => handleDrop(e, f.name)}
+                                        className={`relative w-full cursor-pointer rounded-lg border-2 border-dashed p-5 text-center text-sm transition
+        ${
+            dragActive
+                ? "border-blue-500 bg-blue-50 text-blue-600"
+                : "border-gray-400 bg-gray-50 text-gray-500 hover:border-blue-500 hover:text-blue-500"
+        }`}
+                                    >
+                                        <input
+                                            id={f.id}
+                                            name={f.name}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const file =
+                                                    e.target.files?.[0];
+                                                if (
+                                                    file &&
+                                                    file.type.startsWith(
+                                                        "image/"
+                                                    )
+                                                ) {
+                                                    setData(f.name, file);
+                                                }
+                                            }}
+                                        />
+
+                                        {/* Если файл выбран, показываем имя */}
+                                        {data[f.name] ? (
+                                            <span className="block font-medium text-gray-700 truncate max-w-[200px] mx-auto">
+                                                {data[f.name]?.name}
+                                            </span>
+                                        ) : (
+                                            <>
+                                                <span className="block font-medium">
+                                                    Click or drag image here
+                                                </span>
+                                                <span className="block text-xs text-gray-400 mt-1">
+                                                    PNG / JPG, up to 8MB
+                                                </span>
+                                            </>
+                                        )}
+                                    </label>
+
+                                    {preview && (
+                                        <div className="relative inline-block group cursor-pointer self-start">
+                                            <img
+                                                src={preview}
+                                                alt="Preview"
+                                                className="rounded-lg border object-contain max-h-[140px] transition group-hover:opacity-75"
+                                            />
+                                            <span
+                                                onClick={() => {
+                                                    setData(f.name, null);
+                                                    setPreview(null);
+                                                    const input =
+                                                        document.getElementById(
+                                                            f.id
+                                                        ) as HTMLInputElement | null;
+                                                    if (input) input.value = "";
+                                                }}
+                                                className="absolute inset-0 flex items-center justify-center text-white text-sm font-medium bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                            >
+                                                Click to remove
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             ) : f.type === "select" ? (
                                 <Select
-                                    value={data.type || undefined}   
+                                    value={data.type || undefined}
                                     onValueChange={(value) =>
                                         setData("type", value)
                                     }
@@ -194,10 +299,14 @@ export default function CustomModalForm({
                         </DialogClose>
                         <Button
                             type="submit"
-                            disabled={processing || !isValid}
+                            disabled={processing || !isValid || uploadingImage}
                             className="cursor-pointer"
                         >
-                            {(processing) ? "Saving..." : submitLabel}
+                            {processing
+                                ? "Saving..."
+                                : uploadingImage
+                                ? "Uploading image..."
+                                : submitLabel}
                         </Button>
                     </DialogFooter>
                 </form>

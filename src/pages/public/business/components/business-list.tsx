@@ -9,7 +9,7 @@ interface User {
 interface Business {
     id: number;
     user_id: number;
-    image: string;
+    image_original: string;
     name: string;
     type: string;
     description: string;
@@ -40,10 +40,11 @@ function BusinessList({
                         }`}
                     >
                         <div className={"flex columns-2 gap-3"}>
-                            {el.image && (
+                            {el.image_original && (
                                 <img
-                                    src={imageUrl(el.image)}
-                                    alt={el.image}
+                                    src={imageUrl(el.image_original)}
+                                    alt={el.image_original}
+                                    loading="lazy"
                                     className={
                                         "aspect-square w-1/3 object-contain"
                                     }
@@ -51,7 +52,7 @@ function BusinessList({
                             )}
                             <div
                                 className={`flex flex-col ${
-                                    el.image ? "w-2/3" : "w-full"
+                                    el.image_original ? "w-2/3" : "w-full"
                                 }`}
                             >
                                 <h4 className={"mb-2 text-center"}>

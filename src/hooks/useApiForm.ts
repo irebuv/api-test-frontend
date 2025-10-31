@@ -5,90 +5,98 @@ import api from "@/lib/axios";
 type Errors = Record<string, string[]>;
 
 export function useApiForm<T extends Record<string, any>>(initial: T) {
-    const [data, setDataState] = useState<T>(initial);
-    const [errors, setErrors] = useState<Errors>({});
-    const [processing, setProcessing] = useState(false);
+  const [data, setDataState] = useState<T>(initial);
+  const [errors, setErrors] = useState<Errors>({});
+  const [processing, setProcessing] = useState(false);
 
-    const setField = (name: keyof T | string, value: any) => {
-        setDataState((prev) => ({ ...(prev as any), [name]: value }));
-    };
+  const setField = (name: keyof T | string, value: any) => {
+    setDataState((prev) => ({ ...(prev as any), [name]: value }));
+  };
 
-    const reset = (newValues?: T) => {
-        setDataState(newValues ?? initial);
-        setErrors({});
-        setProcessing(false);
-    };
+  const reset = (newValues?: T) => {
+    setDataState(newValues ?? initial);
+    setErrors({});
+    setProcessing(false);
+  };
 
-    const submit = async (
-        url: string,
-        method: "post" | "put" | "patch" | "delete" = "post",
-        options?: { onSuccess?: (res: any) => void; asFormData?: boolean }
-    ) => {
-        setProcessing(true);
-        setErrors({});
+  // Helper to run any async flow under a single loading flag
+  const withProcessing = async <R,>(fn: () => Promise<R>): Promise<R> => {
+    setProcessing(true);
+    try {
+      return await fn();
+    } finally {
+      setProcessing(false);
+    }
+  };
 
-        try {
-            let payload: any = null;
-            const headers: Record<string, string> = {};
+  const submit = async (
+    url: string,
+    method: "post" | "put" | "patch" | "delete" = "post",
+    options?: { onSuccess?: (res: any) => void; asFormData?: boolean }
+  ) => {
+    setProcessing(true);
+    setErrors({});
 
-            if (options?.asFormData) {
-                const form = new FormData();
+    try {
+      let payload: any = null;
+      const headers: Record<string, string> = {};
 
-                // Добавляем все поля
-                Object.entries(data).forEach(([k, v]) => {
-                    if (v === undefined || v === null) return;
-                    if (v instanceof File) {
-                        form.append(k, v);
-                    } else if (Array.isArray(v)) {
-                        v.forEach((item) => form.append(`${k}[]`, item));
-                    } else {
-                        form.append(k, String(v));
-                    }
-                });
+      if (options?.asFormData) {
+        const form = new FormData();
 
-                // 🧠 Laravel не читает тело при PUT/PATCH multipart — добавляем _method
-                if (method === "put" || method === "patch") {
-                    form.append("_method", method.toUpperCase());
-                    method = "post"; // фактически шлём POST
-                }
+        // Append all fields
+        Object.entries(data).forEach(([k, v]) => {
+          if (v === undefined || v === null) return;
+          if (v instanceof File) {
+            form.append(k, v);
+          } else if (Array.isArray(v)) {
+            v.forEach((item) => form.append(`${k}[]`, item as any));
+          } else if (typeof v === "object") {
+            // Serialize objects to JSON when using FormData
+            form.append(k, JSON.stringify(v));
+          } else {
+            form.append(k, String(v));
+          }
+        });
 
-                payload = form;
-                // Content-Type не ставим — браузер сам добавит boundary
-            } else {
-                payload = data;
-                headers["Content-Type"] = "application/json";
-            }
-
-            const res = await api.request({
-                url,
-                method,
-                data: payload,
-                headers,
-            });
-
-            options?.onSuccess?.(res.data);
-            return res.data;
-        } catch (err: any) {
-            const e = err;
-            if (e?.response?.status === 422 && e.response.data?.errors) {
-                setErrors(e.response.data.errors);
-            } else if (e?.response?.data?.message) {
-                setErrors({ _global: [e.response.data.message] });
-            } else {
-                setErrors({ _global: ["Server error"] });
-            }
-            throw err;
-        } finally {
-            setProcessing(false);
+        // Laravel reads multipart PUT/PATCH only via _method override
+        if (method === "put" || method === "patch") {
+          form.append("_method", method.toUpperCase());
+          method = "post"; // actually send POST
         }
-    };
 
-    return {
-        data,
-        setData: setField,
-        reset,
-        errors,
-        processing,
-        submit,
-    };
+        payload = form;
+        // Do not set Content-Type manually for FormData (browser will set boundary)
+      } else {
+        payload = data;
+        headers["Content-Type"] = "application/json";
+      }
+
+      const res = await api.request({ url, method, data: payload, headers });
+      options?.onSuccess?.(res.data);
+      return res.data;
+    } catch (err: any) {
+      const e = err;
+      if (e?.response?.status === 422 && e.response.data?.errors) {
+        setErrors(e.response.data.errors);
+      } else if (e?.response?.data?.message) {
+        setErrors({ _global: [e.response.data.message] });
+      } else {
+        setErrors({ _global: ["Server error"] });
+      }
+      throw err;
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return {
+    data,
+    setData: setField,
+    reset,
+    errors,
+    processing,
+    withProcessing,
+    submit,
+  };
 }

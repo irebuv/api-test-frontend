@@ -14,6 +14,7 @@ import { validateWithZod, type ClientErrors } from "@/lib/validateWithZod";
 import { BusinessSchema } from "@/validation/business";
 import { RequestSchema } from "@/validation/request";
 import FilterDropdown from "@/components/filter-dropdown";
+import { uploadBusinessImage } from "@/api/uploadBusinessImage";
 
 export default function Businesses() {
     const { data, filters, setFilters, refetch } = useQueryData<
@@ -70,12 +71,14 @@ export default function Businesses() {
         "create"
     );
     const [editingId, setEditingId] = useState<number | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const {
         data: businessData,
         setData: setBusinessData,
         reset: resetBusiness,
         errors: businessErrors,
         processing: businessProcessing,
+        withProcessing: withProcessing,
         submit: submitBusiness,
     } = useApiForm({
         name: "",
@@ -146,44 +149,92 @@ export default function Businesses() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const commonOptions = {
-            asFormData: true,
-            onSuccess: () => {
+        const run = async () => {
+            if (mode === "create") {
+                const result = validateWithZod(BusinessSchema, businessData);
+                if (!result.ok) {
+                    setBizErrors(result.errors);
+                    return;
+                }
+                setBizErrors({});
+
+                // 1) Create business (JSON, NOT form-data)
+                const created = await submitBusiness("/businesses", "post", {
+                    // asFormData: false (default)
+                    onSuccess: () => {}, // optional
+                });
+
+                const createdId: number =
+                    created?.business?.id ??
+                    created?.data?.business?.id ??
+                    created?.data?.id ??
+                    created?.id;
+
+                // 2) Upload image (FormData) after create
+                if (businessData.image && createdId) {
+                    setUploadingImage(true);
+                    try {
+                        await uploadBusinessImage(
+                            createdId,
+                            businessData.image as File
+                        );
+                    } finally {
+                        setUploadingImage(false);
+                    }
+                }
+
                 resetBusiness();
                 setModalOpen(false);
                 refetch();
-            },
+            }
+
+            if (mode === "edit" && editingId) {
+                const result = validateWithZod(BusinessSchema, businessData);
+                if (!result.ok) {
+                    setBizErrors(result.errors);
+                    return;
+                }
+                setBizErrors({});
+
+                // 1) Update business
+                await submitBusiness(`/businesses/${editingId}`, "put");
+
+                // 2) Upload new image if provided
+                if (businessData.image) {
+                    setUploadingImage(true);
+                    try {
+                        await uploadBusinessImage(
+                            editingId,
+                            businessData.image as File
+                        );
+
+                        // ⬇️ immediately refetch business after upload
+                        await refetch();
+                    } finally {
+                        setUploadingImage(false);
+                    }
+                } else {
+                    // ⬇️ if no new image, just refetch updated info
+                    await refetch();
+                }
+
+                resetBusiness();
+                setModalOpen(false);
+            }
+
+            if (mode === "createRequest" && editingId) {
+                const result = validateWithZod(RequestSchema, requestData);
+                if (!result.ok) {
+                    setReqErrors(result.errors);
+                    return;
+                }
+                setReqErrors({});
+                await submitRequest(`/businesses/request/${editingId}`, "post");
+            }
         };
 
-        if (mode === "create") {
-            const result = validateWithZod(BusinessSchema, businessData);
-            if (!result.ok) {
-                setBizErrors(result.errors);
-                return;
-            }
-            setBizErrors({});
-            submitBusiness("/businesses", "post", commonOptions);
-        } else if (mode === "edit" && editingId) {
-            const result = validateWithZod(BusinessSchema, businessData);
-            if (!result.ok) {
-                setBizErrors(result.errors);
-                return;
-            }
-            setBizErrors({});
-            submitBusiness(`/businesses/${editingId}`, "put", commonOptions);
-        } else if (mode === "createRequest" && editingId) {
-            const result = validateWithZod(RequestSchema, requestData);
-            if (!result.ok) {
-                setReqErrors(result.errors);
-                return;
-            }
-            setReqErrors({});
-            submitRequest(
-                `/businesses/request/${editingId}`,
-                "post",
-                commonOptions
-            );
-        }
+        // One loading flag around all steps (create/update -> optional upload -> refetch)
+        withProcessing(run);
     };
     /* ↑↑↑↑↑↑↑↑↑↑↑↑↑ Form block ↑↑↑↑↑↑↑↑↑↑↑↑↑ */
     /* ↓↓↓↓↓↓↓↓↓↓↓↓↓ Clients errors ↓↓↓↓↓↓↓↓↓↓↓↓↓ */
@@ -249,7 +300,11 @@ export default function Businesses() {
     return (
         <MainLayout className="mx-auto mt-5 flex max-w-[1150px] flex-col gap-5 px-7">
             <div className={"flex items-center justify-between"}>
-                <FilterDropdown filters={filters} types={data?.types} setFilters={setFilters} />
+                <FilterDropdown
+                    filters={filters}
+                    types={data?.types}
+                    setFilters={setFilters}
+                />
                 <div className="relative max-w-xs">
                     <Input
                         type="search"
@@ -347,6 +402,7 @@ export default function Businesses() {
                         ? requestProcessing
                         : businessProcessing
                 }
+                uploadingImage={uploadingImage}
                 onSubmit={handleSubmit}
                 submitLabel={mode === "edit" ? "Save" : "Create"}
                 isValid={isValid}

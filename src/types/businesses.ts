@@ -5,7 +5,7 @@ interface User {
 interface Business {
     id: number;
     user_id: number;
-    image: string;
+    image_original: string;
     name: string;
     type: string;
     description: string;
