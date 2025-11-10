@@ -104,7 +104,6 @@ export default function CustomModalForm({
             setData(fieldName, file);
         }
     };
-    console.log(data);
     return (
         <Dialog open={open} onOpenChange={onOpenChange} modal>
             <DialogContent className="sm:max-w-[640px]">

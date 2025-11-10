@@ -2,19 +2,8 @@ import { useAuth } from "@/context/AuthContext";
 import { Pen, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { imageUrl } from "@/utils/imageUrl";
+import { Business } from "@/types/businesses";
 
-interface User {
-    phone: string;
-}
-interface Business {
-    id: number;
-    user_id: number;
-    image_original: string;
-    name: string;
-    type: string;
-    description: string;
-    user: User;
-}
 
 interface BusinessProps {
     onDelete?: (id: number) => void;
@@ -36,14 +25,14 @@ function BusinessList({
                     <div
                         key={el.id}
                         className={`grid p-3 shadow shadow-blue-100 ${
-                            user?.id === el.user_id && "bg-sky-50"
+                            user?.id === el.owner?.id && "bg-sky-50"
                         }`}
                     >
                         <div className={"flex columns-2 gap-3"}>
-                            {el.image_original && (
+                            {el.images.original && (
                                 <img
-                                    src={imageUrl(el.image_original)}
-                                    alt={el.image_original}
+                                    src={imageUrl(el.images.original)}
+                                    alt={el.images.original}
                                     loading="lazy"
                                     className={
                                         "aspect-square w-1/3 object-contain"
@@ -52,7 +41,7 @@ function BusinessList({
                             )}
                             <div
                                 className={`flex flex-col ${
-                                    el.image_original ? "w-2/3" : "w-full"
+                                    el.images.original ? "w-2/3" : "w-full"
                                 }`}
                             >
                                 <h4 className={"mb-2 text-center"}>
@@ -60,7 +49,7 @@ function BusinessList({
                                 </h4>
                                 <p>{el.description}</p>
                                 <div className={"self-end mt-auto"}>
-                                    <b>{el.user?.phone}</b>
+                                    <b>{el.owner?.phone}</b>
                                 </div>
                             </div>
                         </div>
@@ -68,7 +57,7 @@ function BusinessList({
                             className={`mt-2 flex w-full justify-between self-end`}
                         >
                             <div className="flex items-center gap-1">
-                                {user?.id === el.user_id && (
+                                {user?.id === el.owner?.id && (
                                     <div>
                                         <Button
                                             variant={"ghost"}

@@ -36,6 +36,7 @@ export default function Businesses() {
             sort: "id",
         },
     });
+    console.log('data', data)
     console.log("serverInfo =", (data as any)?.serverInfo ?? "");
     const businessesFields = [
         { id: "name", name: "name", label: "Name", type: "text" },
@@ -337,7 +338,7 @@ export default function Businesses() {
                                     className={"w-[30px] cursor-pointer"}
                                     id="myBusinesses"
                                     type={"checkbox"}
-                                    checked={data?.myProjects == 1}
+                                    checked={!!data?.myProjects}
                                     onChange={(e) =>
                                         setFilters({
                                             myProjects: e.target.checked
@@ -409,12 +410,12 @@ export default function Businesses() {
             />
             <BusinessList
                 onEdit={(el) => openEdit(el)}
-                businesses={data?.businesses.data ?? []}
+                businesses={data?.businesses ?? []}
                 onCreateRequest={(businessId) => onCreateRequest(businessId)}
                 onDelete={(businessId) => handleDelete(businessId)}
             />
             <Pagination
-                products={data?.businesses}
+                products={data?.pagination ?? null}
                 onPageChange={(page) => setFilters({ page })}
             />
         </MainLayout>

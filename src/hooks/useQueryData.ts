@@ -8,9 +8,9 @@ type UseQueryDataParams<TFilters> = {
 };
 
 export function useQueryData<TData, TFilters extends Record<string, any>>({
-                                                                              url,
-                                                                              initial,
-                                                                          }: UseQueryDataParams<TFilters>) {
+    url,
+    initial,
+}: UseQueryDataParams<TFilters>) {
     const [filters, setFiltersState] = useState<TFilters>(() => {
         const params = new URLSearchParams(window.location.search);
         const obj = { ...initial };
@@ -25,18 +25,23 @@ export function useQueryData<TData, TFilters extends Record<string, any>>({
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<any>(null);
 
-    const fetchData = useCallback(async (paramsObj: TFilters) => {
-        setLoading(true);
-        try {
-            const response = await api.get<TData>(url, { params: paramsObj });
-            setData(response.data);
-            setError(null);
-        } catch (err) {
-            setError(err);
-        } finally {
-            setLoading(false);
-        }
-    }, [url]);
+    const fetchData = useCallback(
+        async (paramsObj: TFilters) => {
+            setLoading(true);
+            try {
+                const response = await api.get<TData>(url, {
+                    params: paramsObj,
+                });
+                setData(response.data);
+                setError(null);
+            } catch (err) {
+                setError(err);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [url]
+    );
 
     const refetch = useCallback(() => {
         fetchData(filters);
@@ -58,7 +63,6 @@ export function useQueryData<TData, TFilters extends Record<string, any>>({
         fetchData(updated);
     };
 
-
     useEffect(() => {
         fetchData(filters);
 
@@ -67,7 +71,8 @@ export function useQueryData<TData, TFilters extends Record<string, any>>({
             const restoredFilters = { ...initial };
             Object.keys(initial).forEach((key) => {
                 const value = params.get(key);
-                if (value !== null) restoredFilters[key as keyof TFilters] = value as any;
+                if (value !== null)
+                    restoredFilters[key as keyof TFilters] = value as any;
             });
             setFiltersState(restoredFilters);
             fetchData(restoredFilters);
