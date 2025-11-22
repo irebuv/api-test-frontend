@@ -3,6 +3,7 @@ import WhackAMole from "./WhackAMole";
 import { useState } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import Snake from "./Snake";
+import Tetris from "./Tetris";
 
 const GAMES = [
     {
@@ -15,6 +16,11 @@ const GAMES = [
         label: "🐹 Whack-a-Mole",
         Component: WhackAMole,
     },
+    {
+        id: "tetris",
+        label: "🧱 Tetris", 
+        Component: Tetris,
+    }
 ] as const;
 
 type GameId = (typeof GAMES)[number]["id"];
@@ -25,7 +31,7 @@ export default function GamesController() {
     const activeGame = GAMES.find((g) => g.id === activeId);
 
     return (
-        <div className="p-6 max-w-xl mx-auto">
+        <div className="p-6 max-w-[900px] mx-auto">
             <div className="flex flex-wrap gap-3 mb-6 justify-center">
                 {GAMES.map((game) => (
                     <Button
