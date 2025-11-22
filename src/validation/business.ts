@@ -8,7 +8,7 @@ export const BusinessSchema = z.object({
     .instanceof(File)
     .optional()
     .or(z.null())
-    .refine((f) => !f || f.size <= 5_000_000, "Image must be ≤ 5MB")
+    .refine((f) => !f || f.size <= 8_000_000, "Image must be ≤ 8MB")
     .refine((f) => !f || /^image\//.test(f.type), "Only images"),
 });
 export type BusinessInput = z.infer<typeof BusinessSchema>;

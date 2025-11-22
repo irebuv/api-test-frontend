@@ -2,13 +2,6 @@ import MainLayout from "@/layouts/main-layout";
 import BusinessList from "@/pages/public/business/components/business-list";
 import React, { useState } from "react";
 import { Pagination } from "@/components/ui/custom/pagination";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import type { BusinessResponse } from "@/types/businesses";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -20,6 +13,8 @@ import { useQueryData } from "@/hooks/useQueryData";
 import { validateWithZod, type ClientErrors } from "@/lib/validateWithZod";
 import { BusinessSchema } from "@/validation/business";
 import { RequestSchema } from "@/validation/request";
+import FilterDropdown from "@/components/filter-dropdown";
+import { uploadBusinessImage } from "@/api/uploadBusinessImage";
 
 export default function Businesses() {
     const { data, filters, setFilters, refetch } = useQueryData<
@@ -28,12 +23,21 @@ export default function Businesses() {
             type: string;
             myProjects: number | string;
             page: number;
+            search: string;
+            sort: string;
         }
     >({
         url: "/businesses",
-        initial: { type: "all", myProjects: 0, page: 1 },
+        initial: {
+            type: "all",
+            myProjects: 0,
+            page: 1,
+            search: "",
+            sort: "id",
+        },
     });
-
+    console.log('data', data)
+    console.log("serverInfo =", (data as any)?.serverInfo ?? "");
     const businessesFields = [
         { id: "name", name: "name", label: "Name", type: "text" },
         {
@@ -68,12 +72,14 @@ export default function Businesses() {
         "create"
     );
     const [editingId, setEditingId] = useState<number | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const {
         data: businessData,
         setData: setBusinessData,
         reset: resetBusiness,
         errors: businessErrors,
         processing: businessProcessing,
+        withProcessing: withProcessing,
         submit: submitBusiness,
     } = useApiForm({
         name: "",
@@ -102,6 +108,7 @@ export default function Businesses() {
         setMode("create");
         setEditingId(null);
         setModalOpen(true);
+        setIsValid(false);
     };
     const onCreateRequest = (businessId: number) => {
         resetRequest();
@@ -111,8 +118,10 @@ export default function Businesses() {
         setMode("createRequest");
         setEditingId(businessId);
         setModalOpen(true);
+        setIsValid(false);
     };
     const openEdit = (item: any) => {
+        console.log(item.type);
         resetRequest();
         resetBusiness({
             name: item.name ?? "",
@@ -125,64 +134,162 @@ export default function Businesses() {
         setMode("edit");
         setEditingId(item.id);
         setModalOpen(true);
+        setTimeout(
+            () =>
+                setIsValid(
+                    BusinessSchema.safeParse({
+                        name: item.name ?? "",
+                        description: item.description ?? "",
+                        image: null,
+                        type: item.type ?? "",
+                    }).success
+                ),
+            0
+        );
     };
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        const run = async () => {
+            if (mode === "create") {
+                const result = validateWithZod(BusinessSchema, businessData);
+                if (!result.ok) {
+                    setBizErrors(result.errors);
+                    return;
+                }
+                setBizErrors({});
 
-        const commonOptions = {
-            asFormData: true,
-            onSuccess: () => {
+                // 1) Create business (JSON, NOT form-data)
+                const created = await submitBusiness("/businesses", "post", {
+                    // asFormData: false (default)
+                    onSuccess: () => {}, // optional
+                });
+
+                const createdId: number =
+                    created?.business?.id ??
+                    created?.data?.business?.id ??
+                    created?.data?.id ??
+                    created?.id;
+
+                // 2) Upload image (FormData) after create
+                if (businessData.image && createdId) {
+                    setUploadingImage(true);
+                    try {
+                        await uploadBusinessImage(
+                            createdId,
+                            businessData.image as File
+                        );
+                    } finally {
+                        setUploadingImage(false);
+                    }
+                }
+
                 resetBusiness();
                 setModalOpen(false);
                 refetch();
-            },
+            }
+
+            if (mode === "edit" && editingId) {
+                const result = validateWithZod(BusinessSchema, businessData);
+                if (!result.ok) {
+                    setBizErrors(result.errors);
+                    return;
+                }
+                setBizErrors({});
+
+                // 1) Update business
+                await submitBusiness(`/businesses/${editingId}`, "put");
+
+                // 2) Upload new image if provided
+                if (businessData.image) {
+                    setUploadingImage(true);
+                    try {
+                        await uploadBusinessImage(
+                            editingId,
+                            businessData.image as File
+                        );
+
+                        // ⬇️ immediately refetch business after upload
+                        await refetch();
+                    } finally {
+                        setUploadingImage(false);
+                    }
+                } else {
+                    // ⬇️ if no new image, just refetch updated info
+                    await refetch();
+                }
+
+                resetBusiness();
+                setModalOpen(false);
+            }
+
+            if (mode === "createRequest" && editingId) {
+                const result = validateWithZod(RequestSchema, requestData);
+                if (!result.ok) {
+                    setReqErrors(result.errors);
+                    return;
+                }
+                setReqErrors({});
+                await submitRequest(`/businesses/request/${editingId}`, "post");
+            }
         };
 
-        if (mode === "create") {
-        const result = validateWithZod(BusinessSchema, businessData);
-        if (!result.ok) {
-            setBizErrors(result.errors);
-            return;
-        }
-        setBizErrors({});
-            submitBusiness("/businesses", "post", commonOptions);
-        } else if (mode === "edit" && editingId) {
-            submitBusiness(`/businesses/${editingId}`, "put", commonOptions);
-        } else if (mode === "createRequest" && editingId) {
-            const result = validateWithZod(RequestSchema, requestData);
-            if (!result.ok) {
-                setReqErrors(result.errors);
-                return;
-            }
-            setReqErrors({});
-            submitRequest(
-                `/businesses/request/${editingId}`,
-                "post",
-                commonOptions
-            );
-        }
+        // One loading flag around all steps (create/update -> optional upload -> refetch)
+        withProcessing(run);
     };
     /* ↑↑↑↑↑↑↑↑↑↑↑↑↑ Form block ↑↑↑↑↑↑↑↑↑↑↑↑↑ */
     /* ↓↓↓↓↓↓↓↓↓↓↓↓↓ Clients errors ↓↓↓↓↓↓↓↓↓↓↓↓↓ */
     const [bizErrors, setBizErrors] = useState<ClientErrors>({});
     const [reqErrors, setReqErrors] = useState<ClientErrors>({});
+    const [isValid, setIsValid] = useState(false);
 
     const mergedBusinessErrors = { ...businessErrors, ...bizErrors };
     const mergedRequestErrors = { ...requestErrors, ...reqErrors };
-    
-   const setBusinessField = (name: string, value: any) => {
-     setBusinessData(name as any, value);
-     setBizErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
-   };
-   const setRequestField = (name: string, value: any) => {
-     setRequestData(name as any, value);
-     setReqErrors((e) => (e[name] ? { ...e, [name]: "" } : e));
-   };
+
+    const setBusinessField = (name: string, value: any) => {
+        setBusinessData(name as any, value);
+
+        const err = validateField(BusinessSchema, name, value);
+
+        setBizErrors((prev) => ({
+            ...prev,
+            [name]: err ?? "",
+        }));
+
+        const allValid = BusinessSchema.safeParse({
+            ...businessData,
+            [name]: value,
+        }).success;
+        setIsValid(allValid);
+    };
+
+    const setRequestField = (name: string, value: any) => {
+        setRequestData(name as any, value);
+
+        const err = validateField(RequestSchema, name, value);
+
+        setReqErrors((prev) => ({
+            ...prev,
+            [name]: err ?? "",
+        }));
+
+        const allValid = RequestSchema.safeParse({
+            ...requestData,
+            [name]: value,
+        }).success;
+        setIsValid(allValid);
+    };
+
+    const validateField = (schema: any, name: string, value: any) => {
+        const shape = schema.shape?.[name];
+        if (!shape) return null;
+        const result = shape.safeParse(value);
+        return result.success ? null : result.error.issues[0].message;
+    };
     /* ↑↑↑↑↑↑↑↑↑↑↑↑↑ Clients errors ↑↑↑↑↑↑↑↑↑↑↑↑↑ */
 
     const { user } = useAuth();
-
+    console.log(filters.type, filters.sort);
     const handleDelete = (id: number) => {
         submitBusiness(`/businesses/${id}`, "delete", {
             onSuccess: () => {
@@ -193,32 +300,36 @@ export default function Businesses() {
     };
     return (
         <MainLayout className="mx-auto mt-5 flex max-w-[1150px] flex-col gap-5 px-7">
-            <div className={"flex items-center"}>
-                <div className={"w-[200px]"}>
-                    <Select
-                        value={filters.type}
-                        onValueChange={(value) => setFilters({ type: value })}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder={`All`}></SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All</SelectItem>
-                            {data?.types?.map((el) => (
-                                <SelectItem key={el} value={el}>
-                                    {el}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+            <div className={"flex items-center justify-between"}>
+                <FilterDropdown
+                    filters={filters}
+                    types={data?.types}
+                    setFilters={setFilters}
+                />
+                <div className="relative max-w-xs">
+                    <Input
+                        type="search"
+                        className="w-[300px]"
+                        value={filters.search || ""}
+                        onChange={(e) => setFilters({ search: e.target.value })}
+                    />
+                    {filters.search && (
+                        <button
+                            type="button"
+                            onClick={() => setFilters({ search: "" })}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
-                <div className="ml-auto">
+                <div>
                     {user ? (
                         <div className="flex items-center gap-3">
                             <label
                                 htmlFor="myBusinesses"
                                 className={
-                                    "flex w-full cursor-pointer items-center justify-end p-2"
+                                    "flex w-auto cursor-pointer items-center justify-end p-2"
                                 }
                             >
                                 <span>Only my projects</span>
@@ -227,7 +338,7 @@ export default function Businesses() {
                                     className={"w-[30px] cursor-pointer"}
                                     id="myBusinesses"
                                     type={"checkbox"}
-                                    checked={data?.myProjects == 1}
+                                    checked={!!data?.myProjects}
                                     onChange={(e) =>
                                         setFilters({
                                             myProjects: e.target.checked
@@ -277,7 +388,11 @@ export default function Businesses() {
                     mode === "createRequest" ? requestFields : businessesFields
                 }
                 data={mode === "createRequest" ? requestData : businessData}
-                 setData={mode === "createRequest" ? setRequestField : setBusinessField}
+                setData={
+                    mode === "createRequest"
+                        ? setRequestField
+                        : setBusinessField
+                }
                 errors={
                     mode === "createRequest"
                         ? mergedRequestErrors
@@ -288,17 +403,19 @@ export default function Businesses() {
                         ? requestProcessing
                         : businessProcessing
                 }
+                uploadingImage={uploadingImage}
                 onSubmit={handleSubmit}
                 submitLabel={mode === "edit" ? "Save" : "Create"}
+                isValid={isValid}
             />
             <BusinessList
                 onEdit={(el) => openEdit(el)}
-                businesses={data?.businesses.data ?? []}
+                businesses={data?.businesses ?? []}
                 onCreateRequest={(businessId) => onCreateRequest(businessId)}
                 onDelete={(businessId) => handleDelete(businessId)}
             />
             <Pagination
-                products={data?.businesses}
+                products={data?.pagination ?? null}
                 onPageChange={(page) => setFilters({ page })}
             />
         </MainLayout>

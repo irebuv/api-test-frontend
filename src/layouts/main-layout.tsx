@@ -1,14 +1,15 @@
-import { type ReactNode } from 'react';
+import { type ReactNode } from "react";
 import MainContent from "./app-content";
 import Header from "../components/shared/Header/Header";
-import {Theme} from "@radix-ui/themes";
+import { Theme } from "@radix-ui/themes";
+import { CartProvider } from "@/cart/context";
 
 interface AppLayoutProps {
     children?: ReactNode;
     className?: string;
 }
 
-export default function MainLayout ({ children, className }: AppLayoutProps) {
+export default function MainLayout({ children, className }: AppLayoutProps) {
     // const { flash } = usePage().props as { flash?: { success?: string; error?: string } };
     //
     // useEffect(() => {
@@ -22,10 +23,12 @@ export default function MainLayout ({ children, className }: AppLayoutProps) {
     return (
         <>
             <Theme>
-                <Header></Header>
-                <div className={className}>
-                    <MainContent>{children}</MainContent>
-                </div>
+                <CartProvider>
+                    <Header></Header>
+                    <div className={className}>
+                        <MainContent>{children}</MainContent>
+                    </div>
+                </CartProvider>
             </Theme>
         </>
     );

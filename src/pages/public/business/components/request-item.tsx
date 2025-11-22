@@ -1,15 +1,7 @@
 import React from 'react';
-import {imageUrl} from "@/utils/imageUrl";
-interface Order {
-    id: string;
-    name: string;
-    is_read: boolean;
-    phone: string;
-    date: string;
-    business_name: string;
-    business_image: string;
-    description: string;
-}
+import { imageUrl } from "@/utils/imageUrl";
+import type { Order } from "@/types/businesses";
+
 export default function RequestItem({ el }: { el: Order }) {
     const [highlight, setHighlight] = React.useState(false);
     console.log(el.is_read)

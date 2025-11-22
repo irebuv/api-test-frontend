@@ -11,17 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import RequestItem from "@/pages/public/business/components/request-item";
 import api from "@/lib/axios";
-
-interface Order {
-    id: string;
-    name: string;
-    is_read: boolean;
-    phone: string;
-    date: string;
-    business_name: string;
-    business_image: string;
-    description: string;
-}
+import { Order } from '@/types/businesses';
 
 interface FormProps {
     unreadCount: number;
